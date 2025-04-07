@@ -1,5 +1,5 @@
 let player, tokens, debtWall, debtOracle;
-let bgMusic, coinSound, wallCrumbleSound, winSound, gameOverSound;
+let bgMusic, introMusic, coinSound, wallCrumbleSound, winSound, gameOverSound;
 let networkActivity = 0;
 let cityBackground, titleImage, supercollateralCoin, liquidationMonster;
 let destroyerIdle, destroyerFlyingRight, destroyerFlyingLeft, sadHero;
@@ -11,6 +11,7 @@ let buttonHovered = false;
 let titleWidth, titleHeight;
 let gameTimer = 0;
 let hasSpawnedInitialMonsters = false;
+let hasPlayedIntroMusic = false; // Flag to track if intro music has played
 
 // Transition animation variables
 let transitionTimer = 0;
@@ -76,6 +77,7 @@ function preload() {
   destroyerFlyingLeft = loadImage('destroyer-flying-left.png');
   sadHero = loadImage('sad-hero.png');
   bgMusic = new Howl({ src: ['synthwave-bg.mp3'], loop: true, volume: 0.5 });
+  introMusic = new Howl({ src: ['intro.mp3'], loop: true, volume: 0.5 });
   coinSound = new Howl({ src: ['coin.mp3'] });
   wallCrumbleSound = new Howl({ src: ['crumble.mp3'] });
   winSound = new Howl({ src: ['win.wav'] });
@@ -172,8 +174,9 @@ function resetGame() {
 
   // Reset flags
   hasSpawnedInitialMonsters = false;
+  hasPlayedIntroMusic = false; // Reset the flag so music can play again on interaction
 
-  // Reset music (already stopped in winLevel/gameOver, but ensure it's ready to play)
+  // Reset music
   bgMusic.stop();
 }
 
@@ -234,12 +237,12 @@ function draw() {
     textSize(14);
     textAlign(CENTER);
     textWrap(WORD);
-    text("Soar with LEFT/RIGHT keys to grab coins, Hero!", width / 2, 250, 560);
-    text("Smash the Debt Wall by collecting coins, but they vanish in 2 seconds!", width / 2, 280, 560);
-    text("Dodge Monsters—they steal loot or add debt!", width / 2, 320, 560);
-    text("Crush the debt to claim Superseed glory!", width / 2, 350, 560);
+    text("Dash with the LEFT/RIGHT keys and leap with UP to chase down shimmering coins!", width / 2, 250, 560);
+    text("Smash through the looming Debt Wall — but hurry, coins vanish after just 2 seconds!", width / 2, 280, 560);
+    text("Dodge sneaky Monsters — they’ll swipe your loot or stack your debt!", width / 2, 310, 560);
+    text("Conquer the debt and rise to Superseed glory, brave Hero!", width / 2, 340, 560);
 
-    image(destroyerIdle, width / 2 - player.width / 2, 430, player.width, player.height);
+    image(destroyerIdle, width / 2 - player.width / 2, 390, player.width, player.height);
 
     let buttonX = width / 2 - 100;
     let buttonY = 465 - 25;
@@ -251,13 +254,13 @@ function draw() {
       hoverFade = max(hoverFade - hoverFadeSpeed, 0);
     }
 
-    let currentColor = lerpColor(invertedColor, originalColor, hoverFade);
+    let currentColor = lerpColor(originalColor, invertedColor, hoverFade);
     fill(currentColor);
     rectMode(CENTER);
     rect(width / 2, 465, 200, 50, 10);
     fill(0);
     textSize(20);
-    text("Let's Grow!", width / 2, 470);
+    text("Let's Go!", width / 2, 470);
   } else if (gameState === "flyAround") {
     flyTimer += 1;
     let t = flyTimer / flyDuration;
@@ -340,11 +343,18 @@ function draw() {
     updateDebtOracle();
     drawUI();
 
+    // Draw countdown timer with white box and black border
     textFont(monoFont);
-    fill(255, 0, 0);
     textSize(20);
     textAlign(CENTER);
-    text(nf(countdownTimer, 2), width / 2, 40);
+    rectMode(CENTER);
+    fill(255); // White background
+    stroke(0); // Black border
+    strokeWeight(4); // Thick border
+    rect(width / 2, 40, 50, 30); // White box
+    noStroke(); // Remove stroke for text
+    fill(countdownTimer <= 10 ? color(255, 0, 0) : color(0)); // Red if <= 10, black otherwise
+    text(nf(countdownTimer, 2), width / 2, 45);
   } else if (gameState === "debtCleared") {
     fill(0, 200);
     rectMode(CENTER);
@@ -356,7 +366,10 @@ function draw() {
     textAlign(CENTER);
     text("Debt Cleared!", width / 2, 150);
 
-    image(destroyerIdle, width / 2 - player.width / 2, 200, player.width, player.height);
+    let scaleFactor = 2;
+    let scaledWidth = player.width * scaleFactor;
+    let scaledHeight = player.height * scaleFactor;
+    image(destroyerIdle, width / 2 - scaledWidth / 2, 200, scaledWidth, scaledHeight);
 
     let tryAgainX = width / 2 - 180;
     let tryAgainY = 400 - 25;
@@ -366,12 +379,12 @@ function draw() {
     } else {
       tryAgainFade = max(tryAgainFade - hoverFadeSpeed, 0);
     }
-    let tryAgainColor = lerpColor(invertedColor, originalColor, tryAgainFade);
+    let tryAgainColor = lerpColor(originalColor, invertedColor, tryAgainFade);
     fill(tryAgainColor);
     rect(tryAgainX + 75, 400, 150, 50, 10);
     fill(0);
     textSize(20);
-    text("Play Again", tryAgainX + 75, 405); // Changed "Try Again" to "Play Again"
+    text("Play Again", tryAgainX + 75, 405);
 
     let leaderboardX = width / 2 + 30;
     let leaderboardY = 400 - 25;
@@ -414,7 +427,7 @@ function draw() {
     fill(tryAgainColor);
     rect(tryAgainX + 75, 400, 150, 50, 10);
     fill(0);
-    textSize(20); // Fixed typo: was textSize(W)
+    textSize(20);
     text("Try Again", tryAgainX + 75, 405);
 
     let leaderboardX = width / 2 + 30;
@@ -437,19 +450,29 @@ function draw() {
     rect(width / 2, height / 2, 600, 500, 20);
 
     fill(255);
+    textAlign(CENTER);
+    textWrap(WORD);
+
+    // Set the text box width to 500 to create padding on the left and right (600 - 50 on each side = 500)
+    let textBoxWidth = 500;
+
+    // Title
     textSize(20);
     textStyle(NORMAL);
-    textAlign(CENTER);
-    text("There is no leaderboard", width / 2, 150);
+    text("There is no leaderboard.", width / 2, 150, textBoxWidth);
+
+    // Main body text
     textSize(16);
-    text("There is no winning or losing in debt onchain, just make sure", width / 2, 200);
-    text("you are comfortable with what you are investing or risking.", width / 2, 220);
-    text("Explore self-repaying loans by Superseed, a new financial", width / 2, 240);
-    text("primitive where network fees fuel a better onchain experience.", width / 2, 260);
-    text("With love, Superseed Hero.", width / 2, 300);
+    text("Onchain finance isn’t a race — it’s about moving at your own pace. Know what you’re investing or risking, and stay within your comfort zone.", width / 2, 180, textBoxWidth);
+
+    // Additional text
+    text("Discover self-repaying loans with Superseed — a new financial primitive where network fees help reduce your debt and improve the onchain experience.", width / 2, 260, textBoxWidth);
+
+    // Signature
+    text("With care,\nSuperseed Hero.", width / 2, 340, textBoxWidth);
 
     let backX = width / 2 - 50;
-    let backY = 400 - 25;
+    let backY = 420 - 25; // Moved 20px lower (400 -> 420)
     backHovered = (mouseX >= backX && mouseX <= backX + 100 && mouseY >= backY && mouseY <= backY + 50);
     if (backHovered) {
       backFade = min(backFade + hoverFadeSpeed, 1);
@@ -458,18 +481,25 @@ function draw() {
     }
     let backColor = lerpColor(invertedColor, originalColor, backFade);
     fill(backColor);
-    rect(backX + 50, 400, 100, 50, 10);
+    rect(backX + 50, 420, 100, 50, 10); // Adjusted y position
     fill(0);
     textSize(20);
-    text("Back", backX + 50, 405);
+    text("Back", backX + 50, 425); // Adjusted y position (405 -> 425)
   }
 }
 
 function mousePressed() {
+  // Play intro music on the first user interaction if it hasn't played yet
+  if (!hasPlayedIntroMusic && gameState === "start") {
+    introMusic.play();
+    hasPlayedIntroMusic = true;
+  }
+
   if (gameState === "start") {
     let buttonX = width / 2 - 100;
     let buttonY = 465 - 25;
     if (mouseX >= buttonX && mouseX <= buttonX + 200 && mouseY >= buttonY && mouseY <= buttonY + 50) {
+      introMusic.stop(); // Stop intro music when "Let's Go" is clicked
       startGame();
     }
   } else if (gameState === "gameOver" || gameState === "debtCleared") {
@@ -488,7 +518,7 @@ function mousePressed() {
     }
   } else if (gameState === "leaderboard") {
     let backX = width / 2 - 50;
-    let backY = 400 - 25;
+    let backY = 420 - 25; // Updated y position
     if (mouseX >= backX && mouseX <= backX + 100 && mouseY >= backY && mouseY <= backY + 50) {
       gameState = "gameOver";
     }
@@ -511,37 +541,32 @@ function updatePlayer() {
 
   // Handle jumping
   if (keyIsDown(UP_ARROW) && player.onGround) {
-    player.ySpeed = jumpForce; // Apply upward velocity
-    player.onGround = false;   // Player is now in the air
+    player.ySpeed = jumpForce;
+    player.onGround = false;
   }
 
   // Apply gravity
   player.ySpeed += gravity;
   player.y += player.ySpeed;
 
-  // Check if player has landed
   if (player.y >= player.groundY) {
-    player.y = player.groundY; // Snap to ground
-    player.ySpeed = 0;         // Stop vertical movement
-    player.onGround = true;    // Player is back on the ground
+    player.y = player.groundY;
+    player.ySpeed = 0;
+    player.onGround = true;
   }
 
   isMoving = (player.x !== prevX);
 
-  // Display appropriate sprite based on movement and jumping
   if (!player.onGround) {
-    // In the air (jumping or falling)
     if (direction === -1) {
       image(destroyerFlyingLeft, player.x, player.y, player.width, player.height);
     } else if (direction === 1) {
       image(destroyerFlyingRight, player.x, player.y, player.width, player.height);
     } else {
-      // Use the flying sprite that matches the last direction
       let sprite = direction === -1 ? destroyerFlyingLeft : destroyerFlyingRight;
       image(sprite, player.x, player.y, player.width, player.height);
     }
   } else {
-    // On the ground
     if (isMoving) {
       if (direction === -1) {
         image(destroyerFlyingLeft, player.x, player.y, player.width, player.height);
@@ -598,7 +623,7 @@ function updateTokens() {
     if (dist(player.x + player.width / 2, player.y + player.height / 2, tokens[i].x, tokens[i].y) < (player.width / 2 + tokens[i].size / 2)) {
       tokens.splice(i, 1);
       debtWall.health -= 10;
-      coinsCollected += 1;
+      coinsCollected += 1; // Ensure this increments
       coinSound.play();
       if (debtWall.health <= 0) winLevel();
     }
@@ -622,13 +647,20 @@ function updateMonsters() {
     if (dist(player.x + player.width / 2, player.y + player.height / 2, monsters[i].x, monsters[i].y) < (player.width / 2 + monsters[i].size / 2)) {
       monsters.splice(i, 1);
       debtWall.health += 100;
+      // Adjust coinsCollected to reflect the increased debt
+      let coinsEquivalent = 100 / 10; // Each coin reduces health by 10, so 100 health = 10 coins
+      coinsCollected = max(0, coinsCollected - coinsEquivalent); // Reduce coinsCollected, but not below 0
       wallCrumbleSound.play();
     }
   }
 }
 
 function updateDebtWall() {
-  if (debtWall.health <= 0) wallCrumbleSound.play();
+  // Only play the crumble sound if the game is still in "playing" state
+  // (i.e., not when the user has won and transitioned to "debtCleared")
+  if (debtWall.health <= 0 && gameState === "playing") {
+    wallCrumbleSound.play();
+  }
 }
 
 function updateDebtOracle() {
@@ -645,26 +677,35 @@ function updateDebtOracle() {
 
 function drawUI() {
   let barX = 10;
-  let barY = 50;
+  let barY = 10;
   let barWidth = 200;
   let barHeight = 30;
   let coinSize = 31;
 
-  image(supercollateralCoin, barX, barY - coinSize - 5, coinSize, coinSize);
+  // Draw the coin
+  image(supercollateralCoin, barX, barY, coinSize, coinSize);
 
+  // Draw the progress bar with a 2px black border
+  stroke(0); // Black border
+  strokeWeight(2); // 2px border
   image(redGradient, barX + coinSize + 5, barY);
 
-  let greenWidth = map(coinsCollected, 0, 90, 0, barWidth);
-  let greenX = barX + coinSize + 5 + barWidth - greenWidth;
-  push();
-  translate(greenX, barY);
-  image(greenGradient, 0, 0, greenWidth, barHeight);
-  pop();
+  if (coinsCollected > 0) {
+    let greenWidth = map(coinsCollected, 0, 90, 0, barWidth);
+    let greenX = barX + coinSize + 5 + barWidth - greenWidth;
+    push();
+    translate(greenX, barY);
+    image(greenGradient, 0, 0, greenWidth, barHeight);
+    pop();
+  }
+  noStroke(); // Remove stroke for the text
 
+  // Draw the text inside the progress bar
   fill(255);
   textSize(16);
   textAlign(CENTER);
   textFont(monoFont);
+  textStyle(BOLD);
   text(`${debtWall.health} ETH`, barX + coinSize + 5 + barWidth / 2, barY + 20);
 }
 
